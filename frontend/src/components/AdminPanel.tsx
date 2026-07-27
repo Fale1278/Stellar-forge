@@ -4,7 +4,7 @@ import { useWalletContext } from '../context/WalletContext'
 import { useStellarContext } from '../context/StellarContext'
 import { useToast } from '../context/ToastContext'
 import { useFactoryState } from '../hooks/useFactoryState'
-import { useTransaction } from '../hooks/useTransaction'
+import { useTransaction, isTransactionInFlight } from '../hooks/useTransaction'
 import { useNetworkGuard } from '../hooks/useNetworkGuard'
 
 // Stroops → display XLM (7 decimals)
@@ -50,11 +50,7 @@ export const AdminPanel: React.FC = () => {
   )
 
   const { execute, status: txStatus } = useTransaction(feeBuilder)
-  const isPending =
-    txStatus === 'simulating' ||
-    txStatus === 'signing' ||
-    txStatus === 'submitting' ||
-    txStatus === 'polling'
+  const isPending = isTransactionInFlight(txStatus)
 
   // Pre-populate form once factory state loads
   useEffect(() => {
