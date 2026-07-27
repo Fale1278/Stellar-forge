@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/Favourorg/Stellar-forge/compare/v1.3.0...v1.3.1) (2026-07-27)
+
+
+### Bug Fixes
+
+* **frontend:** handle every sendTransaction status explicitly ([#1020](https://github.com/Favourorg/Stellar-forge/issues/1020)) ([#1058](https://github.com/Favourorg/Stellar-forge/issues/1058)) ([70ebab6](https://github.com/Favourorg/Stellar-forge/commit/70ebab62bea7d7dc887e3ce6852a7f436b023083)), closes [#1056](https://github.com/Favourorg/Stellar-forge/issues/1056) [#1057](https://github.com/Favourorg/Stellar-forge/issues/1057)
+
 # [1.3.0](https://github.com/Favourorg/Stellar-forge/compare/v1.2.0...v1.3.0) (2026-07-27)
 
 
