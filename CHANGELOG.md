@@ -1,3 +1,10 @@
+## [1.3.2](https://github.com/Favourorg/Stellar-forge/compare/v1.3.1...v1.3.2) (2026-07-28)
+
+
+### Bug Fixes
+
+* **contract:** close open-proxy hole in burn ([#1021](https://github.com/Favourorg/Stellar-forge/issues/1021)) ([#1059](https://github.com/Favourorg/Stellar-forge/issues/1059)) ([895a621](https://github.com/Favourorg/Stellar-forge/commit/895a6218340f8540b8f961ddf47551c96f1c1dbc))
+
 ## [1.3.1](https://github.com/Favourorg/Stellar-forge/compare/v1.3.0...v1.3.1) (2026-07-27)
 
 
