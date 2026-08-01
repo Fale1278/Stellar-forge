@@ -1,3 +1,16 @@
+# [1.4.0](https://github.com/Favourorg/Stellar-forge/compare/v1.3.2...v1.4.0) (2026-08-01)
+
+
+### Bug Fixes
+
+* **contracts:** close remaining FWC26 audit issues ([787dc22](https://github.com/Favourorg/Stellar-forge/commit/787dc22d4272d0258856b6a31967c164dcefddda)), closes [909-#948](https://github.com/909-/issues/948) [#1022](https://github.com/Favourorg/Stellar-forge/issues/1022) [#910](https://github.com/Favourorg/Stellar-forge/issues/910) [#913](https://github.com/Favourorg/Stellar-forge/issues/913) [#916](https://github.com/Favourorg/Stellar-forge/issues/916) [#943](https://github.com/Favourorg/Stellar-forge/issues/943)
+* **frontend:** fix Option encoding, map missing topics, add cap field ([fb3ee73](https://github.com/Favourorg/Stellar-forge/commit/fb3ee73daa47161d932d9f91585762223afa6a1a)), closes [#1022](https://github.com/Favourorg/Stellar-forge/issues/1022) [#917](https://github.com/Favourorg/Stellar-forge/issues/917) [#1022](https://github.com/Favourorg/Stellar-forge/issues/1022) [#943](https://github.com/Favourorg/Stellar-forge/issues/943)
+
+
+### Features
+
+* **api:** add off-chain contract event indexer ([#943](https://github.com/Favourorg/Stellar-forge/issues/943)) ([19a9544](https://github.com/Favourorg/Stellar-forge/commit/19a9544f64827539f6c763c7f9c5b0df725b3cf0))
+
 ## [1.3.2](https://github.com/Favourorg/Stellar-forge/compare/v1.3.1...v1.3.2) (2026-07-28)
 
 
