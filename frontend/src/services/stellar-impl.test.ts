@@ -94,13 +94,19 @@ function makeRaw(
 // ── CONTRACT_TOPIC_MAP completeness ──────────────────────────────────────────
 
 describe('CONTRACT_TOPIC_MAP', () => {
+  // Must match every `symbol_short!` action topic emitted by
+  // contracts/token-factory/src/lib.rs. `scripts/check-event-topic-drift.sh`
+  // enforces the same invariant in CI against the contract source itself.
   const EXPECTED_TOPICS = [
     'init',
     'created',
     'meta',
+    'meta_frz',
     'mint',
     'burn',
     'fees',
+    'split_set',
+    'split_clr',
     'pause',
     'unpause',
     'adm_upd',
@@ -109,7 +115,7 @@ describe('CONTRACT_TOPIC_MAP', () => {
     'wl_tog',
   ] as const
 
-  it('contains exactly the twelve contract topics', () => {
+  it('contains exactly the fifteen contract topics', () => {
     expect(Object.keys(CONTRACT_TOPIC_MAP).sort()).toEqual([...EXPECTED_TOPICS].sort())
   })
 

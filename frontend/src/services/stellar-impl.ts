@@ -61,6 +61,26 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes
 }
 
+/**
+ * Encode a Rust `Option<i128>` contract argument.
+ *
+ * Soroban does not represent `Option<T>` as a tagged union on the wire: `None`
+ * is the plain `Void` ScVal and `Some(v)` is the inner value *itself*, with no
+ * wrapper (see soroban-env-common's `TryFromVal<E, Option<T>> for Val`, which
+ * returns `Val::VOID` for `None` and `t.try_into_val(env)` for `Some`).
+ * Wrapping the value in a `["Some", v]` vector — the encoding used for
+ * `#[contracttype]` enum variants — makes the host's `Option` decode fail,
+ * because a non-void value is handed straight to `i128`'s converter.
+ *
+ * `null`, `undefined` and `''` all encode as `None`.
+ */
+function optionI128(value: string | null | undefined): xdr.ScVal {
+  if (value === null || value === undefined || value === '') {
+    return xdr.ScVal.scvVoid()
+  }
+  return nativeToScVal(BigInt(value), { type: 'i128' })
+}
+
 /** Convert a raw error into the project's AppError shape. */
 function toAppError(err: unknown): AppError {
   const parsed = parseContractError(err)
@@ -404,7 +424,12 @@ function scValToString(val: xdr.ScVal | undefined): string {
  * scripts/check-event-topic-drift.sh (CI).  If you add a new event to the
  * contract, add it here first — the CI script will catch any omission.
  *
- * Audit of all twelve contract topics (lib.rs → frontend):
+ * `meta_frz`, `split_set` and `split_clr` are privileged mutations that the
+ * contract has always emitted but the frontend used to drop on the floor,
+ * leaving holes in the audit trail this table is supposed to reconstruct
+ * (issue #917).
+ *
+ * Audit of all fifteen contract topics (lib.rs → frontend):
  *   init      → 'init'      (factory init)
  *   created   → 'created'   (token deployed)
  *   meta      → 'meta'      (metadata URI set)
@@ -422,9 +447,12 @@ export const CONTRACT_TOPIC_MAP: Record<string, ContractEventType> = {
   init: 'init',
   created: 'created',
   meta: 'meta',
+  meta_frz: 'meta_frz',
   mint: 'mint',
   burn: 'burn',
   fees: 'fees',
+  split_set: 'split_set',
+  split_clr: 'split_clr',
   pause: 'pause',
   unpause: 'unpause',
   adm_upd: 'adm_upd',
@@ -566,7 +594,7 @@ export class StellarService {
      * Omit (or pass null/undefined) to create an uncapped token — the contract
      * receives `Option::None`.
      */
-    maxSupply?: string | null
+    maxSupply?: string | null | undefined
     salt: string
     feePayment: string
   }): Promise<DeploymentResult> {
@@ -591,10 +619,7 @@ export class StellarService {
             nativeToScVal(params.symbol, { type: 'string' }),
             nativeToScVal(params.decimals, { type: 'u32' }),
             nativeToScVal(BigInt(params.initialSupply), { type: 'i128' }),
-            // Option<i128>: None → scvVoid, Some(cap) → i128.
-            params.maxSupply == null
-              ? xdr.ScVal.scvVoid()
-              : nativeToScVal(BigInt(params.maxSupply), { type: 'i128' }),
+            optionI128(params.maxSupply),
             nativeToScVal(BigInt(params.feePayment), { type: 'i128' }),
           ),
         )
@@ -931,17 +956,18 @@ export class StellarService {
       const server = getRpcServer(this.network)
       const contract = new Contract(contractId)
 
-      // Contract expects Option<i128> — wrap each value in Some(i128)
-      const someI128 = (v: bigint) =>
-        xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('Some'), nativeToScVal(v, { type: 'i128' })])
-
+      // `update_fees` takes two `Option<i128>` arguments. These were
+      // previously encoded as `["Some", value]` vectors, which is the layout
+      // for `#[contracttype]` enum variants, not for `Option` — the host
+      // handed the vector straight to i128's converter and the call failed to
+      // decode. See `optionI128` for the correct representation.
       const tx = (await buildTxBuilder(server, sourceAddress, this.network))
         .addOperation(
           contract.call(
             'update_fees',
             new Address(sourceAddress).toScVal(),
-            someI128(BigInt(params.baseFee)),
-            someI128(BigInt(params.metadataFee)),
+            optionI128(params.baseFee),
+            optionI128(params.metadataFee),
           ),
         )
         .setTimeout(30)

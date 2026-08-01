@@ -113,6 +113,7 @@ export const validateTokenParams = (params: {
   symbol?: string
   decimals?: number
   initialSupply?: string
+  maxSupply?: string
 }) => {
   const errors: Record<string, string> = {}
 
@@ -141,6 +142,21 @@ export const validateTokenParams = (params: {
 
   if (!params.initialSupply || parseFloat(params.initialSupply) <= 0) {
     errors.initialSupply = 'Initial supply must be greater than 0'
+  }
+
+  // `maxSupply` is optional — an empty value means "uncapped" and the contract
+  // receives `None`. When supplied it must mirror the contract's own guards in
+  // the shared `validate_token_params`: a positive cap that is not already
+  // breached by the initial mint. Checking here turns a failed on-chain
+  // transaction (for which the creator still pays a fee) into inline feedback.
+  const maxSupply = params.maxSupply?.trim() || ''
+  if (maxSupply) {
+    const cap = parseFloat(maxSupply)
+    if (!Number.isFinite(cap) || cap <= 0) {
+      errors.maxSupply = 'Max supply must be greater than 0'
+    } else if (params.initialSupply && parseFloat(params.initialSupply) > cap) {
+      errors.maxSupply = 'Max supply must be greater than or equal to the initial supply'
+    }
   }
 
   return { valid: Object.keys(errors).length === 0, errors }

@@ -60,6 +60,7 @@ export const CreateToken: React.FC<CreateTokenProps> = ({ onSuccess }) => {
     symbol: string
     decimals: number
     initialSupply: string
+    maxSupply?: string
   } | null>(null)
 
   const txBuilder = useCallback(
@@ -69,6 +70,7 @@ export const CreateToken: React.FC<CreateTokenProps> = ({ onSuccess }) => {
         symbol: paramsRef.current!.symbol,
         decimals: paramsRef.current!.decimals,
         initialSupply: paramsRef.current!.initialSupply,
+        maxSupply: paramsRef.current!.maxSupply,
         salt:
           Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15),
         feePayment: factoryState?.baseFee ?? '100000',
@@ -81,7 +83,13 @@ export const CreateToken: React.FC<CreateTokenProps> = ({ onSuccess }) => {
   const isSubmitting = isTransactionInFlight(status)
 
   const handleTokenFormSubmit = useCallback(
-    async (params: { name: string; symbol: string; decimals: number; initialSupply: string }) => {
+    async (params: {
+      name: string
+      symbol: string
+      decimals: number
+      initialSupply: string
+      maxSupply?: string
+    }) => {
       setShowTimeoutBanner(false)
       paramsRef.current = params
 
