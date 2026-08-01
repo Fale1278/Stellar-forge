@@ -33,7 +33,13 @@ export async function isRateLimited(address: string): Promise<boolean> {
       } else {
         // Window still active
         if (count >= MAX_REQUESTS_PER_WINDOW) return true
-        await kvSet(kvUrl, kvToken, windowKey, JSON.stringify({ count: count + 1, windowStart }), 900)
+        await kvSet(
+          kvUrl,
+          kvToken,
+          windowKey,
+          JSON.stringify({ count: count + 1, windowStart }),
+          900,
+        )
       }
     } else {
       // First request in this window

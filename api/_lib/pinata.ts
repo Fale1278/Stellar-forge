@@ -9,7 +9,9 @@ export function pinataHeaders(extra: Record<string, string> = {}): Record<string
   const apiKey = process.env.PINATA_API_KEY
   const apiSecret = process.env.PINATA_API_SECRET
   if (!apiKey || !apiSecret) {
-    throw new Error('Pinata API credentials are not configured on the server (PINATA_API_KEY / PINATA_API_SECRET).')
+    throw new Error(
+      'Pinata API credentials are not configured on the server (PINATA_API_KEY / PINATA_API_SECRET).',
+    )
   }
   return {
     pinata_api_key: apiKey,

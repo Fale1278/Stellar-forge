@@ -43,7 +43,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = req.body as UploadJsonBody | undefined
-  if (!body || typeof body.name !== 'string' || typeof body.metadata !== 'object' || body.metadata === null) {
+  if (
+    !body ||
+    typeof body.name !== 'string' ||
+    typeof body.metadata !== 'object' ||
+    body.metadata === null
+  ) {
     res.status(400).json({ error: 'Request body must include { metadata: object, name: string }.' })
     return
   }
