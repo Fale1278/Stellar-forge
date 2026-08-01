@@ -108,6 +108,7 @@ fn seed_token(
         TokenFactory::set_persistent(&s.env, &DataKey::TokenInfo(index), &info);
         s.env.storage().instance().set(&DataKey::State, &state);
         TokenFactory::set_persistent(&s.env, &DataKey::TokenIndex(token_addr.clone()), &index);
+        TokenFactory::set_persistent(&s.env, &DataKey::TokenAddress(index), &token_addr);
         TokenFactory::append_creator_token(&s.env, creator, index).unwrap();
         TokenFactory::set_persistent(&s.env, &(&token_addr, symbol_short!("owner")), creator);
     });
@@ -3620,4 +3621,432 @@ fn test_backfill_capped_supply_cannot_be_applied_twice() {
         .client
         .try_backfill_capped_supply(&s.admin, &token_addr, &600);
     assert_eq!(result, Err(Ok(Error::AlreadyBackfilled)));
+}
+// ── Issue #913: whitelist gate storage consistency ───────────────────────────
+//
+// `add_to_whitelist` writes to `persistent` storage and `is_whitelisted` reads
+// persistent-first, but the `create_token` / `create_tokens_batch` gates used
+// to read `instance` storage directly. Any entry present in only one of the
+// two locations produced a split-brain result: the view said "whitelisted"
+// while creation was rejected with `NotWhitelisted`, or vice versa. Both now
+// go through `whitelist_contains`.
+
+/// An entry written only to `persistent` storage — the shape `add_to_whitelist`
+/// produces — must be honoured by the creation gate.
+#[test]
+fn test_whitelist_gate_honors_persistent_entry() {
+    let s = Setup::new();
+    enable_whitelist(&s);
+    let creator = Address::generate(&s.env);
+    s.fund(&creator, 1_000);
+
+    s.env.as_contract(&s.client.address, || {
+        TokenFactory::set_persistent(&s.env, &TokenFactory::whitelist_key(&creator), &true);
+    });
+
+    // Passes the whitelist gate and stops at the deploy step instead.
+    let result = s.client.try_create_token(
+        &creator,
+        &s.salt(0),
+        &String::from_str(&s.env, "T"),
+        &String::from_str(&s.env, "T"),
+        &7,
+        &0_i128,
+        &None,
+        &1_000,
+    );
+    assert!(result != Err(Ok(Error::NotWhitelisted)));
+}
+
+/// An entry written only to `instance` storage — the shape a pre-migration
+/// factory binary left behind — must still be honoured, so upgrading the
+/// contract cannot silently lock out already-whitelisted creators.
+#[test]
+fn test_whitelist_gate_honors_legacy_instance_entry() {
+    let s = Setup::new();
+    enable_whitelist(&s);
+    let creator = Address::generate(&s.env);
+    s.fund(&creator, 1_000);
+
+    s.env.as_contract(&s.client.address, || {
+        s.env
+            .storage()
+            .instance()
+            .set(&TokenFactory::whitelist_key(&creator), &true);
+    });
+
+    assert!(s.client.is_whitelisted(&creator));
+
+    let result = s.client.try_create_token(
+        &creator,
+        &s.salt(0),
+        &String::from_str(&s.env, "T"),
+        &String::from_str(&s.env, "T"),
+        &7,
+        &0_i128,
+        &None,
+        &1_000,
+    );
+    assert!(result != Err(Ok(Error::NotWhitelisted)));
+}
+
+/// The `is_whitelisted` view and the creation gate must never disagree.
+#[test]
+fn test_is_whitelisted_view_agrees_with_creation_gate() {
+    let s = Setup::new();
+    enable_whitelist(&s);
+    let creator = Address::generate(&s.env);
+    s.fund(&creator, 1_000);
+
+    let create = |salt: u8| {
+        s.client.try_create_token(
+            &creator,
+            &s.salt(salt),
+            &String::from_str(&s.env, "T"),
+            &String::from_str(&s.env, "T"),
+            &7,
+            &0_i128,
+            &None,
+            &1_000,
+        )
+    };
+
+    // Not listed: view says false, gate rejects.
+    assert!(!s.client.is_whitelisted(&creator));
+    assert_eq!(create(0), Err(Ok(Error::NotWhitelisted)));
+
+    // Listed: view says true, gate lets the call through.
+    whitelist_add(&s, &creator);
+    assert!(s.client.is_whitelisted(&creator));
+    assert!(create(1) != Err(Ok(Error::NotWhitelisted)));
+
+    // Removed: view says false again, gate rejects again.
+    s.client.remove_from_whitelist(&s.admin, &creator);
+    assert!(!s.client.is_whitelisted(&creator));
+    assert_eq!(create(2), Err(Ok(Error::NotWhitelisted)));
+}
+
+/// The batch path must apply exactly the same gate as the single path.
+#[test]
+fn test_whitelist_gate_consistent_across_single_and_batch() {
+    let s = Setup::new();
+    enable_whitelist(&s);
+    let creator = Address::generate(&s.env);
+    s.fund(&creator, 10_000);
+
+    let params = soroban_sdk::vec![
+        &s.env,
+        BatchTokenParams {
+            salt: s.salt(9),
+            name: String::from_str(&s.env, "T"),
+            symbol: String::from_str(&s.env, "T"),
+            decimals: 7,
+            initial_supply: 0,
+            max_supply: None,
+        }
+    ];
+
+    assert_eq!(
+        s.client.try_create_tokens_batch(&creator, &params, &1_000),
+        Err(Ok(Error::NotWhitelisted))
+    );
+
+    whitelist_add(&s, &creator);
+    assert!(
+        s.client.try_create_tokens_batch(&creator, &params, &1_000)
+            != Err(Ok(Error::NotWhitelisted))
+    );
+}
+
+// ── Issue #916: transfer_admin / update_admin are one operation ──────────────
+//
+// The two entrypoints were independent copies of the same logic that had
+// drifted: only `update_admin` emitted `adm_upd`, so a rotation performed via
+// `transfer_admin` left no on-chain trace and any indexer following the event
+// stream kept reporting the previous admin. Both now delegate to
+// `rotate_admin`.
+
+/// Rotating via `transfer_admin` must actually move admin rights.
+#[test]
+fn test_transfer_admin_grants_new_admin_rights() {
+    let s = Setup::new();
+    let new_admin = Address::generate(&s.env);
+
+    s.client.transfer_admin(&s.admin, &new_admin);
+
+    assert_eq!(s.client.get_state().admin, new_admin);
+    // The new admin can exercise an admin-only entrypoint...
+    s.client.pause(&new_admin);
+    assert!(s.client.get_state().paused);
+    // ...and the old admin can no longer.
+    assert_eq!(s.client.try_unpause(&s.admin), Err(Ok(Error::Unauthorized)));
+}
+
+/// Both entrypoints must enforce identical guards, so neither can be used to
+/// side-step a restriction the other applies.
+#[test]
+fn test_transfer_admin_and_update_admin_share_guards() {
+    let s = Setup::new();
+    let stranger = Address::generate(&s.env);
+    let target = Address::generate(&s.env);
+
+    // Unauthorized caller.
+    assert_eq!(
+        s.client.try_transfer_admin(&stranger, &target),
+        s.client.try_update_admin(&stranger, &target)
+    );
+    // Self-transfer.
+    assert_eq!(
+        s.client.try_transfer_admin(&s.admin, &s.admin),
+        s.client.try_update_admin(&s.admin, &s.admin)
+    );
+}
+
+/// Rotating with either entrypoint must leave the factory in the same state.
+#[test]
+fn test_transfer_admin_and_update_admin_produce_same_state() {
+    let via_transfer = {
+        let s = Setup::new();
+        let new_admin = Address::generate(&s.env);
+        s.client.transfer_admin(&s.admin, &new_admin);
+        (s.client.get_state().admin, new_admin)
+    };
+    let via_update = {
+        let s = Setup::new();
+        let new_admin = Address::generate(&s.env);
+        s.client.update_admin(&s.admin, &new_admin);
+        (s.client.get_state().admin, new_admin)
+    };
+    assert_eq!(via_transfer.0, via_transfer.1);
+    assert_eq!(via_update.0, via_update.1);
+}
+
+// ── migrate: schema-v3 chunked walk must be resumable ───────────────────────
+//
+// The v3 step walks `TokenInfo` indices `1..=token_count` in slices of
+// `MIGRATE_TOKEN_INFO_CHUNK` so a factory too large to migrate in one
+// invocation's resource budget can finish across several `migrate` calls. That
+// only works if the version marker stays below 3 until the cursor catches up:
+// bumping it early makes every later call skip the block, stranding the
+// unmigrated entries in `instance` storage forever.
+
+/// Seed `count` `TokenInfo` entries in `instance` storage and rewind the
+/// factory to schema v2, simulating a pre-#1007 deployment mid-upgrade.
+fn seed_legacy_instance_tokens(s: &Setup, count: u32) {
+    s.env.as_contract(&s.client.address, || {
+        let mut state: FactoryState = s.env.storage().instance().get(&DataKey::State).unwrap();
+        state.token_count = count;
+        state.schema_version = 2;
+        s.env.storage().instance().set(&DataKey::State, &state);
+        s.env.storage().instance().set(&symbol_short!("sv"), &2u32);
+
+        for i in 1..=count {
+            let info = TokenInfo {
+                name: String::from_str(&s.env, "T"),
+                symbol: String::from_str(&s.env, "T"),
+                decimals: 7,
+                creator: s.admin.clone(),
+                created_at: 0,
+                burn_enabled: true,
+                max_supply: None,
+            };
+            s.env
+                .storage()
+                .instance()
+                .set(&DataKey::TokenInfo(i), &info);
+        }
+    });
+}
+
+#[test]
+fn test_migrate_v3_does_not_complete_in_one_chunk_when_oversized() {
+    let s = Setup::new();
+    let count = MIGRATE_TOKEN_INFO_CHUNK * 3;
+    seed_legacy_instance_tokens(&s, count);
+
+    s.client.migrate(&s.admin);
+
+    // Only the first chunk moved, so the migration must still be pending.
+    assert_eq!(s.client.get_state().schema_version, 2);
+    s.env.as_contract(&s.client.address, || {
+        let cursor: u32 = s
+            .env
+            .storage()
+            .instance()
+            .get(&symbol_short!("mig3cur"))
+            .unwrap();
+        assert_eq!(cursor, MIGRATE_TOKEN_INFO_CHUNK);
+    });
+}
+
+#[test]
+fn test_migrate_v3_completes_across_repeated_calls() {
+    let s = Setup::new();
+    let count = MIGRATE_TOKEN_INFO_CHUNK * 3;
+    seed_legacy_instance_tokens(&s, count);
+
+    // Three chunks' worth of entries need three calls to finish.
+    for _ in 0..3 {
+        s.client.migrate(&s.admin);
+    }
+
+    assert_eq!(s.client.get_state().schema_version, CURRENT_SCHEMA_VERSION);
+
+    // Every entry must now live in persistent storage, and none in instance.
+    s.env.as_contract(&s.client.address, || {
+        for i in 1..=count {
+            let key = DataKey::TokenInfo(i);
+            assert!(
+                s.env.storage().persistent().has(&key),
+                "TokenInfo({i}) was not migrated to persistent storage"
+            );
+            assert!(
+                !s.env.storage().instance().has(&key),
+                "TokenInfo({i}) was left behind in instance storage"
+            );
+        }
+    });
+}
+
+/// A factory small enough to migrate in one chunk must still finish in a
+/// single call — the resumability fix must not slow down the common case.
+#[test]
+fn test_migrate_v3_completes_in_one_call_when_small() {
+    let s = Setup::new();
+    seed_legacy_instance_tokens(&s, 3);
+
+    s.client.migrate(&s.admin);
+
+    assert_eq!(s.client.get_state().schema_version, CURRENT_SCHEMA_VERSION);
+}
+
+// ── Issue #943: index → address reverse mapping ──────────────────────────────
+//
+// The factory could resolve address → index (`get_token_index`) but not the
+// inverse, and `get_token_info(index)` does not carry the token's own address.
+// The enumerable key space `1..=token_count` was therefore useless to an
+// off-chain indexer: it could reach `TokenInfo` but never the address it
+// belongs to, so addresses could only be learned from `created` events —
+// which reach back only as far as the RPC's event-retention window. That is
+// precisely the truncation issue #943 exists to remove.
+
+/// `seed_token` mirrors the real creation path, so the reverse mapping it
+/// writes must round-trip in both directions.
+#[test]
+fn test_get_token_address_round_trips_with_get_token_index() {
+    let s = Setup::new();
+    let creator = Address::generate(&s.env);
+    let token_addr = seed_token(&s, &creator, true, None);
+
+    let index = s.client.get_token_index(&token_addr);
+    assert_eq!(s.client.get_token_address(&index), token_addr);
+}
+
+/// Every index in `1..=token_count` must resolve, which is what lets an
+/// indexer enumerate the whole token set from contract state alone.
+#[test]
+fn test_get_token_address_enumerates_full_token_set() {
+    let s = Setup::new();
+    let creator = Address::generate(&s.env);
+
+    let mut expected = std::vec::Vec::new();
+    for _ in 0..5 {
+        expected.push(seed_token(&s, &creator, true, None));
+    }
+
+    let token_count = s.client.get_state().token_count;
+    assert_eq!(token_count, 5);
+
+    for (i, addr) in expected.iter().enumerate() {
+        // Indices are 1-based.
+        let index = (i as u32).checked_add(1).unwrap();
+        assert_eq!(&s.client.get_token_address(&index), addr);
+    }
+}
+
+#[test]
+fn test_get_token_address_unknown_index_returns_not_found() {
+    let s = Setup::new();
+    assert_eq!(
+        s.client.try_get_token_address(&999),
+        Err(Ok(Error::TokenNotFound))
+    );
+}
+
+// ── backfill_token_address ──────────────────────────────────────────────────
+
+/// Simulate a token created by a factory binary predating the reverse
+/// mapping: the forward `TokenIndex` entry exists but `TokenAddress` does not.
+fn seed_token_without_reverse_mapping(s: &Setup, creator: &Address) -> (Address, u32) {
+    let token_addr = seed_token(s, creator, true, None);
+    let index = s.client.get_token_index(&token_addr);
+    s.env.as_contract(&s.client.address, || {
+        s.env
+            .storage()
+            .persistent()
+            .remove(&DataKey::TokenAddress(index));
+    });
+    (token_addr, index)
+}
+
+#[test]
+fn test_backfill_token_address_repairs_a_pre_existing_token() {
+    let s = Setup::new();
+    let creator = Address::generate(&s.env);
+    let (token_addr, index) = seed_token_without_reverse_mapping(&s, &creator);
+
+    // Unmapped before the back-fill.
+    assert_eq!(
+        s.client.try_get_token_address(&index),
+        Err(Ok(Error::TokenNotFound))
+    );
+
+    assert_eq!(s.client.backfill_token_address(&token_addr), index);
+    assert_eq!(s.client.get_token_address(&index), token_addr);
+}
+
+#[test]
+fn test_backfill_token_address_is_idempotent() {
+    let s = Setup::new();
+    let creator = Address::generate(&s.env);
+    let (token_addr, index) = seed_token_without_reverse_mapping(&s, &creator);
+
+    assert_eq!(s.client.backfill_token_address(&token_addr), index);
+    // Re-running must be a no-op, not an error or a rewrite.
+    assert_eq!(s.client.backfill_token_address(&token_addr), index);
+    assert_eq!(s.client.get_token_address(&index), token_addr);
+}
+
+/// The entrypoint is permissionless, so it must never accept an address the
+/// factory did not itself register — otherwise anyone could point an index at
+/// a contract of their choosing.
+#[test]
+fn test_backfill_token_address_rejects_unregistered_address() {
+    let s = Setup::new();
+    let stranger = Address::generate(&s.env);
+    let rogue_token = s.new_token(&stranger);
+
+    assert_eq!(
+        s.client.try_backfill_token_address(&rogue_token),
+        Err(Ok(Error::TokenNotFound))
+    );
+}
+
+/// The index is read back from the factory's own `TokenIndex` entry, never
+/// taken from the caller, so a back-fill cannot repoint an index that is
+/// already correctly mapped to a different token.
+#[test]
+fn test_backfill_token_address_cannot_hijack_another_index() {
+    let s = Setup::new();
+    let creator = Address::generate(&s.env);
+    let first = seed_token(&s, &creator, true, None);
+    let (second, second_index) = seed_token_without_reverse_mapping(&s, &creator);
+
+    let first_index = s.client.get_token_index(&first);
+    s.client.backfill_token_address(&second);
+
+    // Each index still resolves to its own token.
+    assert_eq!(s.client.get_token_address(&first_index), first);
+    assert_eq!(s.client.get_token_address(&second_index), second);
+    assert_ne!(first_index, second_index);
 }

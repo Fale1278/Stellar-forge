@@ -36,6 +36,16 @@ pub enum DataKey {
     /// boundaries without loading every page.
     CreatorTokenCount(Address),
     TokenIndex(Address),
+    /// Reverse of `TokenIndex`: the contract address registered at 1-based
+    /// creation index `u32`.
+    ///
+    /// Without this, the factory's enumerable key space (`1..=token_count`)
+    /// could only yield `TokenInfo`, which does not carry the token's own
+    /// address — so nothing could walk the full token set from contract state
+    /// alone. Off-chain indexers were forced to reconstruct addresses from
+    /// `created` events, which only reach back as far as the RPC's event
+    /// retention window (issue #943).
+    TokenAddress(u32),
     Metadata(Address),
     MetadataVersion(Address),
     MetadataFrozen(Address),
@@ -550,6 +560,34 @@ impl TokenFactory {
         (symbol_short!("wl"), address.clone())
     }
 
+    /// Single source of truth for "is this address whitelisted?" (issue #913).
+    ///
+    /// Whitelist entries are written to `persistent` storage, but binaries
+    /// predating the persistent-storage migration wrote them to `instance`.
+    /// `read_addr_keyed` checks persistent first and falls back to the legacy
+    /// `instance` copy, so this answers correctly for entries written by
+    /// either binary. Both the `is_whitelisted` view and the `create_token` /
+    /// `create_tokens_batch` enforcement gates go through this helper — they
+    /// previously used different lookups, so an entry present in only one of
+    /// the two locations would be reported as whitelisted by the view while
+    /// still being rejected at creation time (or vice versa).
+    fn whitelist_contains(env: &Env, address: &Address) -> bool {
+        Self::read_addr_keyed(env, &Self::whitelist_key(address)).unwrap_or(false)
+    }
+
+    /// Reject `creator` when whitelist enforcement is on and they are not
+    /// listed. No-op when enforcement is disabled.
+    fn require_whitelisted(
+        env: &Env,
+        state: &FactoryState,
+        creator: &Address,
+    ) -> Result<(), Error> {
+        if state.whitelist_enabled && !Self::whitelist_contains(env, creator) {
+            return Err(Error::NotWhitelisted);
+        }
+        Ok(())
+    }
+
     pub fn add_to_whitelist(env: Env, admin: Address, address: Address) -> Result<(), Error> {
         admin.require_auth();
         let state = Self::load_state(&env)?;
@@ -557,9 +595,6 @@ impl TokenFactory {
             return Err(Error::Unauthorized);
         }
         Self::set_persistent(&env, &Self::whitelist_key(&address), &true);
-        env.storage()
-            .instance()
-            .set(&Self::whitelist_key(&address), &true);
         env.events().publish(
             (symbol_short!("factory"), symbol_short!("wl_add")),
             (address,),
@@ -578,9 +613,6 @@ impl TokenFactory {
         // Also clear a pre-migration copy, if any, so a stale `instance`
         // entry can't resurrect the whitelisting after removal.
         env.storage().instance().remove(&key);
-        env.storage()
-            .instance()
-            .remove(&Self::whitelist_key(&address));
         env.events().publish(
             (symbol_short!("factory"), symbol_short!("wl_rm")),
             (address,),
@@ -589,7 +621,7 @@ impl TokenFactory {
     }
 
     pub fn is_whitelisted(env: Env, address: Address) -> bool {
-        Self::read_addr_keyed(&env, &Self::whitelist_key(&address)).unwrap_or(false)
+        Self::whitelist_contains(&env, &address)
     }
 
     pub fn set_whitelist_enabled(env: Env, admin: Address, enabled: bool) -> Result<(), Error> {
@@ -646,13 +678,7 @@ impl TokenFactory {
         }
 
         // Whitelist gate: when enabled, only whitelisted addresses may create tokens.
-        if state.whitelist_enabled {
-            let wl_key = Self::whitelist_key(&creator);
-            let is_wl: bool = env.storage().instance().get(&wl_key).unwrap_or(false);
-            if !is_wl {
-                return Err(Error::NotWhitelisted);
-            }
-        }
+        Self::require_whitelisted(&env, &state, &creator)?;
 
         // Fail fast if token count would overflow before charging any fee.
         if state.token_count.checked_add(1).is_none() {
@@ -815,6 +841,7 @@ impl TokenFactory {
         Self::append_creator_token(env, creator, index)?;
 
         Self::set_persistent(env, &DataKey::TokenIndex(token_address.clone()), &index);
+        Self::set_persistent(env, &DataKey::TokenAddress(index), &token_address);
         Self::set_persistent(env, &(&token_address, symbol_short!("owner")), creator);
 
         env.events().publish(
@@ -876,13 +903,7 @@ impl TokenFactory {
             return Err(Error::InsufficientFee);
         }
         // Whitelist gate: when enabled, only whitelisted addresses may create tokens.
-        if state.whitelist_enabled {
-            let wl_key = Self::whitelist_key(&creator);
-            let is_wl: bool = env.storage().instance().get(&wl_key).unwrap_or(false);
-            if !is_wl {
-                return Err(Error::NotWhitelisted);
-            }
-        }
+        Self::require_whitelisted(&env, &state, &creator)?;
 
         state.locked = true;
         Self::save_state(&env, &state);
@@ -1484,22 +1505,26 @@ impl TokenFactory {
             }
             env.storage().instance().set(&cursor_key, &target);
 
+            // The version marker only advances once the cursor has walked the
+            // whole `1..=token_count` key space. Bumping it earlier would
+            // strand any `TokenInfo` entries beyond the cursor in `instance`
+            // storage, because a subsequent `migrate` call would skip this
+            // block entirely — defeating the chunking that makes the walk
+            // resumable in the first place. Callers migrating a factory with
+            // more than `MIGRATE_TOKEN_INFO_CHUNK` tokens must therefore call
+            // `migrate` repeatedly until `get_state().schema_version == 3`.
             if target >= state.token_count {
                 let mut s = Self::load_state(&env)?;
+                // Version 3 also adds the `whitelist_enabled` field,
+                // defaulting to `false` so existing deployments keep their
+                // open behaviour until an admin explicitly enables
+                // enforcement via `set_whitelist_enabled`.
+                s.whitelist_enabled = false;
                 s.schema_version = 3;
                 Self::save_state(&env, &s);
                 on_chain_version = 3;
                 env.storage().instance().set(&sv_key, &on_chain_version);
             }
-            // Version 3: add the `whitelist_enabled` field, defaulting to
-            // `false` so existing deployments keep their open behaviour until an
-            // admin explicitly enables enforcement via `set_whitelist_enabled`.
-            let mut s = Self::load_state(&env)?;
-            s.whitelist_enabled = false;
-            s.schema_version = 3;
-            Self::save_state(&env, &s);
-            on_chain_version = 3;
-            env.storage().instance().set(&sv_key, &on_chain_version);
         }
 
         // Each future migration step follows the same pattern:
@@ -1571,23 +1596,19 @@ impl TokenFactory {
         Ok(())
     }
 
-    pub fn transfer_admin(env: Env, admin: Address, new_admin: Address) -> Result<(), Error> {
-        admin.require_auth();
-        let mut state = Self::load_state(&env)?;
-        if state.admin != admin {
-            return Err(Error::Unauthorized);
-        }
-        if admin == new_admin {
-            return Err(Error::InvalidParameters);
-        }
-        state.admin = new_admin;
-        Self::save_state(&env, &state);
-        Ok(())
-    }
-
-    pub fn update_admin(env: Env, current_admin: Address, new_admin: Address) -> Result<(), Error> {
+    /// Single implementation of admin rotation, shared by both public
+    /// entrypoints (issue #916).
+    ///
+    /// `transfer_admin` and `update_admin` were independently written copies
+    /// of the same operation that had drifted apart: only `update_admin`
+    /// emitted `adm_upd`, so a rotation performed via `transfer_admin` left
+    /// no on-chain trace and any indexer following the event stream kept
+    /// reporting the previous admin indefinitely. Both entrypoints now
+    /// delegate here so authorization, the self-transfer guard, the state
+    /// write and the event are identical whichever name a caller uses.
+    fn rotate_admin(env: &Env, current_admin: Address, new_admin: Address) -> Result<(), Error> {
         current_admin.require_auth();
-        let mut state = Self::load_state(&env)?;
+        let mut state = Self::load_state(env)?;
         if state.admin != current_admin {
             return Err(Error::Unauthorized);
         }
@@ -1595,12 +1616,23 @@ impl TokenFactory {
             return Err(Error::InvalidParameters);
         }
         state.admin = new_admin.clone();
-        Self::save_state(&env, &state);
+        Self::save_state(env, &state);
         env.events().publish(
             (symbol_short!("factory"), symbol_short!("adm_upd")),
             (current_admin, new_admin),
         );
         Ok(())
+    }
+
+    /// Rotate the factory admin. Retained as an alias of `update_admin` for
+    /// callers built against the older ABI; both emit `adm_upd`.
+    pub fn transfer_admin(env: Env, admin: Address, new_admin: Address) -> Result<(), Error> {
+        Self::rotate_admin(&env, admin, new_admin)
+    }
+
+    /// Rotate the factory admin, emitting `adm_upd`.
+    pub fn update_admin(env: Env, current_admin: Address, new_admin: Address) -> Result<(), Error> {
+        Self::rotate_admin(&env, current_admin, new_admin)
     }
 
     pub fn get_state(env: Env) -> Result<FactoryState, Error> {
@@ -1632,6 +1664,52 @@ impl TokenFactory {
     /// silently truncates once history exceeds one page.
     pub fn get_token_index(env: Env, token_address: Address) -> Result<u32, Error> {
         Self::read_addr_keyed(&env, &DataKey::TokenIndex(token_address)).ok_or(Error::TokenNotFound)
+    }
+
+    /// Resolve a token's contract address from its 1-based creation index —
+    /// the inverse of `get_token_index`.
+    ///
+    /// This is what makes the factory's token set enumerable from contract
+    /// state alone: a client can walk `1..=get_state().token_count` and
+    /// resolve every token, with no dependence on the RPC's event-retention
+    /// window. `get_token_info(index)` deliberately does not carry the
+    /// address, so before this existed an off-chain indexer could only learn
+    /// addresses from `created` events and therefore could never recover
+    /// tokens older than that window (issue #943).
+    ///
+    /// Returns `TokenNotFound` for an index that was never registered, and
+    /// for tokens created by a factory binary predating this mapping — see
+    /// `backfill_token_address` for repairing those.
+    pub fn get_token_address(env: Env, index: u32) -> Result<Address, Error> {
+        Self::read_addr_keyed(&env, &DataKey::TokenAddress(index)).ok_or(Error::TokenNotFound)
+    }
+
+    /// Populate the `index -> address` mapping for a token created before it
+    /// existed (issue #943).
+    ///
+    /// Permissionless and self-verifying rather than admin-gated: the index is
+    /// not taken on trust but read back from the token's own authoritative
+    /// `TokenIndex(address)` entry, so the only mapping that can ever be
+    /// written is the one the factory already recorded at creation time. A
+    /// caller supplying an unrelated or attacker-controlled address simply
+    /// gets `TokenNotFound`, and re-running on an already-mapped index is a
+    /// no-op. That makes it safe to expose to the indexer, which is the
+    /// component that actually needs it and holds no admin key.
+    pub fn backfill_token_address(env: Env, token_address: Address) -> Result<u32, Error> {
+        let index: u32 =
+            Self::migrate_addr_keyed(&env, &DataKey::TokenIndex(token_address.clone()))
+                .ok_or(Error::TokenNotFound)?;
+
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::TokenAddress(index))
+        {
+            return Ok(index);
+        }
+
+        Self::set_persistent(&env, &DataKey::TokenAddress(index), &token_address);
+        Ok(index)
     }
 
     /// Return a token's full `TokenInfo` addressed by its contract address.

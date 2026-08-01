@@ -112,26 +112,26 @@ This matters because clients conventionally pad `fee_payment` above the currentl
 
 Deploy a new token contract under the factory. Requires `fee_payment >= base_fee`; charges exactly `base_fee`. Returns the deployed contract address.
 
-| Param            | Type            | Description                                                                                                   |
-| ---------------- | --------------- | ------------------------------------------------------------------------------------------------------------ |
-| `creator`        | `Address`       | Token creator; must authorize the call and pays the fee.                                                     |
-| `salt`           | `BytesN<32>`    | Deterministic-deploy salt.                                                                                    |
-| `name`           | `String`        | 1–32 bytes.                                                                                                   |
-| `symbol`         | `String`        | 1–12 bytes.                                                                                                   |
-| `decimals`       | `u32`           | 0–18.                                                                                                         |
-| `initial_supply` | `i128`          | Amount minted to `creator` at creation. **Must be ≥ 0** (`0` mints nothing).                                  |
-| `max_supply`     | `Option<i128>`  | Optional supply cap. `Some(cap)` requires `cap > 0` and `cap >= initial_supply`; `None` creates an uncapped token. |
-| `fee_payment`    | `i128`          | Caller-authorized fee upper bound (see fee semantics above).                                                  |
+| Param            | Type           | Description                                                                                                        |
+| ---------------- | -------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `creator`        | `Address`      | Token creator; must authorize the call and pays the fee.                                                           |
+| `salt`           | `BytesN<32>`   | Deterministic-deploy salt.                                                                                         |
+| `name`           | `String`       | 1–32 bytes.                                                                                                        |
+| `symbol`         | `String`       | 1–12 bytes.                                                                                                        |
+| `decimals`       | `u32`          | 0–18.                                                                                                              |
+| `initial_supply` | `i128`         | Amount minted to `creator` at creation. **Must be ≥ 0** (`0` mints nothing).                                       |
+| `max_supply`     | `Option<i128>` | Optional supply cap. `Some(cap)` requires `cap > 0` and `cap >= initial_supply`; `None` creates an uncapped token. |
+| `fee_payment`    | `i128`         | Caller-authorized fee upper bound (see fee semantics above).                                                       |
 
 > **ABI change (issue #1022):** `initial_supply` was widened/retyped from `u128` to **`i128`** (matching the SDK's `mint` signature and the batch path), and the **`max_supply: Option<i128>`** parameter was added so single-token creation can cap supply with the same Issue #1006 accounting as the batch path. This changes the on-chain argument list; the frontend wrapper (`frontend/src/services/stellar.ts → deployToken`) was updated in the same change.
 
 The single (`create_token`) and batch (`create_tokens_batch`) paths share one validation routine and one bookkeeping routine, so a given invalid parameter set is rejected with the **same error code** on either path:
 
-| Fault | Error |
-| --- | --- |
-| `name` empty or > 32 bytes, or `symbol` empty or > 12 bytes | `Error::InvalidTokenParams` |
-| `decimals` > 18 | `Error::InvalidDecimals` |
-| `initial_supply` < 0, or `max_supply` ≤ 0, or `max_supply` < `initial_supply` | `Error::InvalidParameters` |
+| Fault                                                                         | Error                       |
+| ----------------------------------------------------------------------------- | --------------------------- |
+| `name` empty or > 32 bytes, or `symbol` empty or > 12 bytes                   | `Error::InvalidTokenParams` |
+| `decimals` > 18                                                               | `Error::InvalidDecimals`    |
+| `initial_supply` < 0, or `max_supply` ≤ 0, or `max_supply` < `initial_supply` | `Error::InvalidParameters`  |
 
 ### `create_tokens_batch(creator, tokens, fee_payment)`
 
@@ -255,6 +255,20 @@ Look up a single token by 1-based index. Returns `Error::TokenNotFound` for unkn
 
 Resolve a token's 1-based storage index from its contract address, via the `TokenIndex(address)` mapping written at creation. Returns `Error::TokenNotFound` for addresses not registered with this factory. This is the authoritative address → index lookup — clients must not re-derive identity from the factory event stream, which only reflects a bounded RPC retention window.
 
+### `get_token_address(index) → Address`
+
+The inverse of `get_token_index`: resolve a token's contract address from its 1-based creation index. Returns `Error::TokenNotFound` for an index that was never registered.
+
+This is what makes the factory's token set **enumerable from contract state alone** — a client can walk `1..=get_state().token_count` and resolve every token without depending on the RPC's event-retention window. `get_token_info(index)` deliberately carries no address, so before this mapping existed an off-chain indexer could only learn addresses from `created` events and therefore could never recover tokens older than that window (issue #943).
+
+Tokens created by a factory binary predating this mapping return `TokenNotFound`; repair them with `backfill_token_address`.
+
+### `backfill_token_address(token_address) → u32`
+
+Populate the `index → address` mapping for a token created before it existed, returning the index that was mapped. Idempotent: re-running for an already-mapped token is a no-op that returns the same index.
+
+**Permissionless by design, and safe because it is self-verifying.** The index is never taken from the caller — it is read back from the token's own authoritative `TokenIndex(address)` entry, so the only mapping that can ever be written is the one the factory itself recorded at creation time. Supplying an address the factory never registered returns `Error::TokenNotFound`, and an index already mapped to a different token cannot be repointed. That is what makes it safe to expose to the indexer, which is the component that needs it and holds no admin key.
+
 ### `get_token_info_by_address(token_address) → TokenInfo`
 
 Return a token's full `TokenInfo` addressed by its contract address — equivalent to `get_token_info(get_token_index(address))` in a single call. This is the **source of truth** for a token's name, symbol, decimals, creator and creation time; unlike event-derived data it is unaffected by RPC event retention, so a token created arbitrarily long ago still resolves correctly. Returns `Error::TokenNotFound` for unregistered addresses (including the case where the index mapping exists but the `TokenInfo` entry is missing).
@@ -333,7 +347,9 @@ Read the current split (empty map means no split).
 
 ### `update_admin(current_admin, new_admin)` / `transfer_admin(admin, new_admin)`
 
-Hand the admin privilege to `new_admin`. Both events emit the same effect; `update_admin` additionally emits an `adm_upd` event for off-chain tracking.
+Hand the admin privilege to `new_admin`. The two names are aliases for one operation: both delegate to the same internal implementation, so both require the current admin's auth, both reject a self-transfer with `Error::InvalidParameters`, and **both emit `adm_upd`**.
+
+Before the fix for issue #916 these were independently written copies that had drifted apart — only `update_admin` emitted the event, so a rotation performed through `transfer_admin` left no on-chain trace and indexers following the event stream kept reporting the previous admin indefinitely. `transfer_admin` is retained only for callers built against the older ABI; new integrations should use `update_admin`.
 
 ### `upgrade(admin, new_wasm_hash)`
 
