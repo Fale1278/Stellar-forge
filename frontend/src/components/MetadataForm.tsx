@@ -11,7 +11,7 @@ import { useBalanceCheck } from '../hooks/useBalanceCheck'
 import { useNetwork } from '../context/NetworkContext'
 import { useNetworkGuard } from '../hooks/useNetworkGuard'
 import { useTos } from '../context/TosContext'
-import { isIpfsConfigured } from '../config/env'
+import { useIpfsReady } from '../hooks/useIpfsReady'
 import { ExplorerLink } from './ExplorerLink'
 import { useFactoryState } from '../hooks/useFactoryState'
 
@@ -53,7 +53,8 @@ export const MetadataForm: React.FC<MetadataFormProps> = ({ initialTokenAddress 
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const ipfsReady = isIpfsConfigured()
+  const ipfsReadiness = useIpfsReady()
+  const ipfsReady = ipfsReadiness === 'ready'
   const isSubmitting = step === 'uploading-ipfs' || step === 'confirming-stellar'
 
   const progressSteps: ProgressStep[] = [
@@ -184,18 +185,30 @@ export const MetadataForm: React.FC<MetadataFormProps> = ({ initialTokenAddress 
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  if (ipfsReadiness === 'checking') {
+    return (
+      <div
+        className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-sm text-gray-500 dark:text-gray-400"
+        aria-busy="true"
+        role="status"
+      >
+        Checking upload availability…
+      </div>
+    )
+  }
+
   if (!ipfsReady) {
     return (
       <div className="rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 p-4 text-sm text-yellow-800 dark:text-yellow-300">
-        IPFS upload is disabled. Set{' '}
+        IPFS upload is disabled: this deployment has no pinning credentials. Set{' '}
         <code className="font-mono bg-yellow-100 dark:bg-yellow-900 px-1 rounded">
-          VITE_IPFS_API_KEY
+          PINATA_API_KEY
         </code>{' '}
         and{' '}
         <code className="font-mono bg-yellow-100 dark:bg-yellow-900 px-1 rounded">
-          VITE_IPFS_API_SECRET
+          PINATA_API_SECRET
         </code>{' '}
-        to enable metadata uploads.
+        in the server environment to enable metadata uploads.
       </div>
     )
   }

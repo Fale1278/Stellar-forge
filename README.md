@@ -1,6 +1,6 @@
 # StellarForge - Stellar Token Deployer
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Favourorg/Stellar-forge&root=frontend&env=VITE_FACTORY_CONTRACT_ID,VITE_TOKEN_WASM_HASH,VITE_IPFS_API_KEY,VITE_IPFS_API_SECRET&envDescription=Required%20environment%20variables%20for%20StellarForge&envLink=https://github.com/Favourorg/Stellar-forge/blob/main/docs/deployment-vercel.md)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Favourorg/Stellar-forge&root=frontend&env=VITE_FACTORY_CONTRACT_ID,VITE_TOKEN_WASM_HASH,PINATA_API_KEY,PINATA_API_SECRET&envDescription=Required%20environment%20variables%20for%20StellarForge&envLink=https://github.com/Favourorg/Stellar-forge/blob/main/docs/deployment-vercel.md)
 
 StellarForge is a user-friendly decentralized application (dApp) that enables creators, entrepreneurs, and businesses in emerging markets to deploy custom tokens on the Stellar blockchain without writing a single line of code.
 
@@ -183,7 +183,13 @@ PINATA_API_KEY=<pinata-api-key>
 PINATA_API_SECRET=<pinata-api-secret>
 ```
 
-> **Note:** `VITE_FACTORY_CONTRACT_ID`, `VITE_IPFS_API_KEY`, and `VITE_IPFS_API_SECRET` are required. The app will display a misconfiguration screen if any of these are missing, rather than failing silently at runtime.
+> **Note:** `VITE_FACTORY_CONTRACT_ID` and `VITE_TOKEN_WASM_HASH` are required. The app will display a misconfiguration screen if either is missing, rather than failing silently at runtime.
+>
+> **Pinata credentials are not frontend variables.** Vite inlines every `VITE_`-prefixed
+> value into the built JavaScript, so a `VITE_IPFS_API_KEY` is readable by anyone who
+> loads the page. Set `PINATA_API_KEY` and `PINATA_API_SECRET` in the _server_
+> environment instead; the serverless functions in `api/ipfs/` proxy uploads, and the UI
+> learns whether they are configured from `GET /api/health/ipfs`.
 
 ## Building & Testing
 
@@ -449,8 +455,13 @@ Update these required variables:
 VITE_NETWORK=testnet
 VITE_FACTORY_CONTRACT_ID=<your-factory-contract-id>
 VITE_TOKEN_WASM_HASH=<your-token-wasm-hash>
-VITE_IPFS_API_KEY=<your-pinata-api-key>
-VITE_IPFS_API_SECRET=<your-pinata-api-secret>
+```
+
+Pinata credentials go in the **server** environment, never the frontend build:
+
+```env
+PINATA_API_KEY=<your-pinata-api-key>
+PINATA_API_SECRET=<your-pinata-api-secret>
 ```
 
 > **Keep `VITE_TOKEN_WASM_HASH` in sync with the factory.** This value must equal the
@@ -561,8 +572,9 @@ One or more required environment variables are missing. Check that your `.env` f
 
 - `VITE_FACTORY_CONTRACT_ID`
 - `VITE_TOKEN_WASM_HASH`
-- `VITE_IPFS_API_KEY`
-- `VITE_IPFS_API_SECRET`
+
+(Pinata credentials are server-side — `PINATA_API_KEY` / `PINATA_API_SECRET` — and
+their absence disables uploads with an inline notice rather than this screen.)
 
 Restart the dev server after changing `.env` files.
 
@@ -916,13 +928,10 @@ Two utilities are exported from `frontend/src/services/stellar.ts`:
 ```ts
 // 1. Wrap a signed inner transaction in a fee bump envelope.
 //    The fee-source account (connected via Freighter) signs the bump.
-const signedFeeBumpXdr = await buildFeeBumpTransaction(
-  innerTxXdr,
-  feeSourceAddress,
-);
+const signedFeeBumpXdr = await buildFeeBumpTransaction(innerTxXdr, feeSourceAddress)
 
 // 2. Submit the fee bump and wait for confirmation.
-const txHash = await submitFeeBumpTransaction(signedFeeBumpXdr);
+const txHash = await submitFeeBumpTransaction(signedFeeBumpXdr)
 ```
 
 The fee source must have enough XLM to cover the base fee. The inner transaction is not re-signed — only the fee bump envelope requires the fee source's signature.
@@ -953,11 +962,11 @@ The factory contract supports in-place WASM upgrades without redeploying or migr
 | 1       | Initial versioned schema — added `schema_version` field to `FactoryState`                                                                                                                                                                                                                                                                                                                                                                                                  |
 | 2       | Max-supply accounting fix (issue #1006) — `deploy_one` now seeds the per-token supply counter with `initial_supply`; version bump only, no `FactoryState` field changes. Pre-fix capped tokens must be back-filled individually via `backfill_capped_supply` (see [docs/contract-abi.md](./docs/contract-abi.md#supply-cap-accounting))                                                                                                                                    |
 | 3       | Persistent-storage migration (issue #1007) — per-token bookkeeping (`TokenInfo`, `TokenIndex`, `Metadata`, `owner`, `supply`, `CreatorTokens`) moves out of the shared `instance` ledger entry into `persistent` storage, keeping `instance` storage O(1) in `token_count`. `TokenInfo` migrates in bounded, resumable chunks per `migrate` call; everything else migrates lazily on next access (see [docs/contract-abi.md](./docs/contract-abi.md#storage-architecture)) |
-| Version | Change                                                                                                                                                                                                                                                                                                                                  |
-| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1       | Initial versioned schema — added `schema_version` field to `FactoryState`                                                                                                                                                                                                                                                               |
-| 2       | Max-supply accounting fix (issue #1006) — `deploy_one` now seeds the per-token supply counter with `initial_supply`; version bump only, no `FactoryState` field changes. Pre-fix capped tokens must be back-filled individually via `backfill_capped_supply` (see [docs/contract-abi.md](./docs/contract-abi.md#supply-cap-accounting)) |
-| 3       | Added `whitelist_enabled: bool` to `FactoryState`; new `set_whitelist_enabled` entrypoint; `create_token` and `create_tokens_batch` enforce the whitelist gate when enabled                                                                                                                                                              |
+| Version | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------                                                                                                                                    |
+| 1       | Initial versioned schema — added `schema_version` field to `FactoryState`                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 2       | Max-supply accounting fix (issue #1006) — `deploy_one` now seeds the per-token supply counter with `initial_supply`; version bump only, no `FactoryState` field changes. Pre-fix capped tokens must be back-filled individually via `backfill_capped_supply` (see [docs/contract-abi.md](./docs/contract-abi.md#supply-cap-accounting))                                                                                                                                    |
+| 3       | Added `whitelist_enabled: bool` to `FactoryState`; new `set_whitelist_enabled` entrypoint; `create_token` and `create_tokens_batch` enforce the whitelist gate when enabled                                                                                                                                                                                                                                                                                                |
 
 ### Adding a new migration (version N → N+1)
 

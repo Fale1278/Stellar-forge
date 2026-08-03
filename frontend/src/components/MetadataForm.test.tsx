@@ -41,9 +41,10 @@ vi.mock('../context/WalletContext', async (importOriginal) => ({
   }),
 }))
 
-vi.mock('../config/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../config/env')>()),
-  isIpfsConfigured: () => true,
+// Upload availability is server state now, not build config: the form asks
+// GET /api/health/ipfs via useIpfsReady().
+vi.mock('../hooks/useIpfsReady', () => ({
+  useIpfsReady: () => 'ready',
 }))
 
 const renderMetadataForm = () =>

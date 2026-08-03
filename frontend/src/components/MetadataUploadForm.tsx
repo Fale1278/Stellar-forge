@@ -4,7 +4,7 @@ import { Input, Button } from './UI'
 import { useToast } from '../context/ToastContext'
 import { useWalletContext } from '../context/WalletContext'
 import { ipfsService, MAX_METADATA_DESCRIPTION_LENGTH } from '../services/ipfs'
-import { isIpfsConfigured } from '../config/env'
+import { useIpfsReady } from '../hooks/useIpfsReady'
 import { isValidImageFile } from '../utils/validation'
 import { DropZone } from './DropZone'
 import { logger } from '../utils/logger'
@@ -28,7 +28,8 @@ export const MetadataUploadForm: React.FC<MetadataUploadFormProps> = ({
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isUploading, setIsUploading] = useState(false)
 
-  const ipfsReady = isIpfsConfigured() && wallet.isConnected
+  const ipfsReadiness = useIpfsReady()
+  const ipfsReady = ipfsReadiness === 'ready' && wallet.isConnected
 
   const [imagePreview, setImagePreview] = useState<string | null>(null)
 
@@ -112,19 +113,44 @@ export const MetadataUploadForm: React.FC<MetadataUploadFormProps> = ({
     }
   }
 
-  if (!ipfsReady) {
+  // The three reasons uploads may be unavailable are distinct and used to be
+  // collapsed into one "set your API keys" message — which was wrong advice
+  // for two of them.
+  if (ipfsReadiness === 'checking') {
+    return (
+      <div
+        className="rounded-lg border border-gray-200 dark:border-gray-700 p-4"
+        aria-busy="true"
+        role="status"
+      >
+        <p className="text-sm text-gray-500 dark:text-gray-400">Checking upload availability…</p>
+      </div>
+    )
+  }
+
+  if (ipfsReadiness === 'unconfigured') {
     return (
       <div className="rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 p-4">
         <p className="text-sm text-yellow-800 dark:text-yellow-300">
-          IPFS upload is disabled. Set{' '}
+          IPFS upload is disabled: this deployment has no pinning credentials. Set{' '}
           <code className="font-mono bg-yellow-100 dark:bg-yellow-900 px-1 rounded">
-            VITE_IPFS_API_KEY
+            PINATA_API_KEY
           </code>{' '}
           and{' '}
           <code className="font-mono bg-yellow-100 dark:bg-yellow-900 px-1 rounded">
-            VITE_IPFS_API_SECRET
+            PINATA_API_SECRET
           </code>{' '}
-          to enable metadata uploads.
+          in the server environment to enable metadata uploads.
+        </p>
+      </div>
+    )
+  }
+
+  if (!wallet.isConnected) {
+    return (
+      <div className="rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 p-4">
+        <p className="text-sm text-yellow-800 dark:text-yellow-300">
+          Connect your wallet to upload token metadata.
         </p>
       </div>
     )
