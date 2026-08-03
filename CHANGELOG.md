@@ -1,3 +1,11 @@
+## [1.4.1](https://github.com/Favourorg/Stellar-forge/compare/v1.4.0...v1.4.1) (2026-08-03)
+
+
+### Bug Fixes
+
+* **build:** build the contract for wasm32v1-none everywhere ([#940](https://github.com/Favourorg/Stellar-forge/issues/940)) ([0aa6df3](https://github.com/Favourorg/Stellar-forge/commit/0aa6df38bc25e5bf1941a7dbbafd12616a108505))
+* **security:** stop shipping Pinata credentials in the frontend bundle ([#921](https://github.com/Favourorg/Stellar-forge/issues/921)) ([2a23cad](https://github.com/Favourorg/Stellar-forge/commit/2a23cad10304a6b822720ec0ac4cfe5eb19d3a09))
+
 # [1.4.0](https://github.com/Favourorg/Stellar-forge/compare/v1.3.2...v1.4.0) (2026-08-01)
 
 
