@@ -1,4 +1,4 @@
-import { render, screen, act } from '@testing-library/react'
+import { render, screen, act, waitFor } from '@testing-library/react'
 import { describe, test, expect, vi, beforeEach, afterEach, type Mock } from 'vitest'
 import { TransactionStatus } from './TransactionStatus'
 import { stellarService } from '../services/stellar'
@@ -42,13 +42,20 @@ describe('TransactionStatus Component', () => {
       await Promise.resolve()
     })
 
-    await vi.waitFor(() => {
+    // `onSuccess` fires from a passive effect, which React flushes *after* the
+    // commit that paints "Transaction Successful". Waiting on the text alone
+    // (with a non-act-wrapped waiter) can therefore return in the window where
+    // the DOM has updated but the effect has not run yet — the flake that
+    // turned CI red on fb3ee73. Testing Library's `waitFor` wraps each poll in
+    // `act`, and asserting the callback inside the same waiter means the
+    // condition is retried until the effect has actually flushed.
+    await waitFor(() => {
       expect(screen.getByText('Transaction Successful')).toBeInTheDocument()
+      expect(onSuccess).toHaveBeenCalled()
     })
 
     const link = screen.getByRole('link', { name: /view on stellar expert/i })
     expect(link).toHaveAttribute('href', 'https://stellar.expert/explorer/testnet/tx/test-hash')
-    expect(onSuccess).toHaveBeenCalled()
   })
 
   test('polls and handles failed transaction', async () => {
@@ -104,17 +111,22 @@ describe('TransactionStatus Component', () => {
       />,
     )
 
+    // Same passive-effect ordering hazard as the success case, so the callback
+    // is asserted inside the waiter rather than after it. This one drives the
+    // clock by hand, so it keeps `vi.waitFor` — Testing Library's act-wrapped
+    // waiter runs its own timer advancement and never lets the 60s deadline
+    // land.
     await vi.waitFor(
       () => {
         vi.advanceTimersByTime(60000)
         expect(screen.getByText('Not Confirmed Yet')).toBeInTheDocument()
+        expect(onUnconfirmed).toHaveBeenCalledWith(expect.stringMatching(/not been included/i))
       },
       { timeout: 5000 },
     )
 
     expect(screen.queryByText('Transaction Failed')).not.toBeInTheDocument()
     expect(onError).not.toHaveBeenCalled()
-    expect(onUnconfirmed).toHaveBeenCalledWith(expect.stringMatching(/not been included/i))
     // No retry affordance: resubmitting could execute the call twice.
     expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument()
   })
