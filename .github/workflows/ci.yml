@@ -70,6 +70,22 @@ jobs:
         run: cargo fmt -- --check
         working-directory: contracts
 
+  # Both scripts existed but were wired into nothing — no workflow, no npm
+  # script, no git hook — so the drift they exist to catch (issues #946 and
+  # #1014) was only ever caught by someone remembering to run them by hand.
+  # They are pure bash/awk over the sources, so they need no toolchain.
+  drift-checks:
+    name: Contract/Frontend Drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: ABI documentation drift (docs/contract-abi.md vs lib.rs)
+        run: ./scripts/check-abi-doc-drift.sh
+
+      - name: Event topic drift (lib.rs vs CONTRACT_TOPIC_MAP)
+        run: ./scripts/check-event-topic-drift.sh
+
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
@@ -220,8 +236,6 @@ jobs:
           # placeholder — no factory contract is deployed onto the local network in this job
           VITE_FACTORY_CONTRACT_ID: CCN6L3B2R6G2H5J4J4J4J4J4J4J4J4J4J4J4J4J4J4J4J4J4J4
           VITE_TOKEN_WASM_HASH: "0000000000000000000000000000000000000000000000000000000000000000"
-          VITE_IPFS_API_KEY: mock-key
-          VITE_IPFS_API_SECRET: mock-secret
 
       - name: Run E2E tests
         run: npm run test:e2e
@@ -231,8 +245,6 @@ jobs:
           # placeholder — no factory contract is deployed onto the local network in this job
           VITE_FACTORY_CONTRACT_ID: CCN6L3B2R6G2H5J4J4J4J4J4J4J4J4J4J4J4J4J4J4J4J4J4J4
           VITE_TOKEN_WASM_HASH: "0000000000000000000000000000000000000000000000000000000000000000"
-          VITE_IPFS_API_KEY: mock-key
-          VITE_IPFS_API_SECRET: mock-secret
 
       - name: Stop Local Stellar Network
         if: always()
