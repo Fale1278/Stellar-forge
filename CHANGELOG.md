@@ -1,3 +1,10 @@
+## [1.4.2](https://github.com/Favourorg/Stellar-forge/compare/v1.4.1...v1.4.2) (2026-08-20)
+
+
+### Bug Fixes
+
+* relabel TokenDetail Admin field to 'Deployed by' (Closes [#1109](https://github.com/Favourorg/Stellar-forge/issues/1109)) ([#1119](https://github.com/Favourorg/Stellar-forge/issues/1119)) ([5d5df07](https://github.com/Favourorg/Stellar-forge/commit/5d5df075612a6e510448e17087c281d987a36478))
+
 ## [1.4.1](https://github.com/Favourorg/Stellar-forge/compare/v1.4.0...v1.4.1) (2026-08-03)
 
 
