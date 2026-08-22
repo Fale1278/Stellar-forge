@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/Favourorg/Stellar-forge/compare/v1.5.0...v1.5.1) (2026-08-22)
+
+
+### Bug Fixes
+
+* align frontend token validation with contract (name ≤ 32 UTF-8 bytes, remove ASCII-only restriction) ([#1125](https://github.com/Favourorg/Stellar-forge/issues/1125)) ([cefa9b9](https://github.com/Favourorg/Stellar-forge/commit/cefa9b9c13bbc7f2b5a770e5376369c4875c3833))
+
 # [1.5.0](https://github.com/Favourorg/Stellar-forge/compare/v1.4.4...v1.5.0) (2026-08-22)
 
 
