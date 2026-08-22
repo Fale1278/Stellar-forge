@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/Favourorg/Stellar-forge/compare/v1.4.4...v1.5.0) (2026-08-22)
+
+
+### Features
+
+* show pre-signature fee recipient breakdown and batch total (Closes [#1108](https://github.com/Favourorg/Stellar-forge/issues/1108)) ([#1124](https://github.com/Favourorg/Stellar-forge/issues/1124)) ([f983539](https://github.com/Favourorg/Stellar-forge/commit/f983539afe0eccc35503bc0a0378e47f0f0d70de))
+
 ## [1.4.4](https://github.com/Favourorg/Stellar-forge/compare/v1.4.3...v1.4.4) (2026-08-22)
 
 
