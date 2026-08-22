@@ -379,8 +379,8 @@ stellar contract install \
 If you don't have a token WASM, you can use the Stellar Asset Contract:
 
 ```bash
-# Download the official Stellar token contract
-wget https://github.com/stellar/soroban-examples/raw/main/token/target/wasm32-unknown-unknown/release/soroban_token_contract.wasm
+# Download from a pinned release tag (replace v0.x.y with a specific tag — do NOT use main)
+wget https://github.com/stellar/soroban-examples/raw/<TAG>/token/target/wasm32-unknown-unknown/release/soroban_token_contract.wasm
 
 # Install it
 stellar contract install \
