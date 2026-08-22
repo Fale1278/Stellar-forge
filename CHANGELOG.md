@@ -1,3 +1,10 @@
+## [1.5.3](https://github.com/Favourorg/Stellar-forge/compare/v1.5.2...v1.5.3) (2026-08-22)
+
+
+### Bug Fixes
+
+* **api:** remove clientIp() dead code with inverted XFF parsing (audit [#26](https://github.com/Favourorg/Stellar-forge/issues/26)) ([#1129](https://github.com/Favourorg/Stellar-forge/issues/1129)) ([fa1a888](https://github.com/Favourorg/Stellar-forge/commit/fa1a888c99133d2fafab52f3e79444d1ac188766)), closes [#1101](https://github.com/Favourorg/Stellar-forge/issues/1101)
+
 ## [1.5.2](https://github.com/Favourorg/Stellar-forge/compare/v1.5.1...v1.5.2) (2026-08-22)
 
 
