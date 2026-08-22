@@ -1,3 +1,10 @@
+## [1.5.2](https://github.com/Favourorg/Stellar-forge/compare/v1.5.1...v1.5.2) (2026-08-22)
+
+
+### Bug Fixes
+
+* **explorer:** snapshot tokenCount once per session to prevent pagination drift ([#1126](https://github.com/Favourorg/Stellar-forge/issues/1126)) ([a27f77b](https://github.com/Favourorg/Stellar-forge/commit/a27f77b8dda5b76feced0cf6baeac7a42a84bcf0))
+
 ## [1.5.1](https://github.com/Favourorg/Stellar-forge/compare/v1.5.0...v1.5.1) (2026-08-22)
 
 
