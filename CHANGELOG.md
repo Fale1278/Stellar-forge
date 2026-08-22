@@ -1,3 +1,10 @@
+## [1.5.4](https://github.com/Favourorg/Stellar-forge/compare/v1.5.3...v1.5.4) (2026-08-22)
+
+
+### Bug Fixes
+
+* **infra:** schedule the indexer cron in vercel.json (Closes [#1090](https://github.com/Favourorg/Stellar-forge/issues/1090)) ([#1130](https://github.com/Favourorg/Stellar-forge/issues/1130)) ([288d5f3](https://github.com/Favourorg/Stellar-forge/commit/288d5f3b1208405fd08e12342fef2ae58cf25a7b)), closes [#1123](https://github.com/Favourorg/Stellar-forge/issues/1123) [#1124](https://github.com/Favourorg/Stellar-forge/issues/1124) [#1125](https://github.com/Favourorg/Stellar-forge/issues/1125) [#1126](https://github.com/Favourorg/Stellar-forge/issues/1126) [#1126](https://github.com/Favourorg/Stellar-forge/issues/1126) [#1126](https://github.com/Favourorg/Stellar-forge/issues/1126) [#1121](https://github.com/Favourorg/Stellar-forge/issues/1121) [#1121](https://github.com/Favourorg/Stellar-forge/issues/1121)
+
 ## [1.5.3](https://github.com/Favourorg/Stellar-forge/compare/v1.5.2...v1.5.3) (2026-08-22)
 
 
