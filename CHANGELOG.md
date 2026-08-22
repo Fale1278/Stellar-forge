@@ -1,3 +1,10 @@
+## [1.4.4](https://github.com/Favourorg/Stellar-forge/compare/v1.4.3...v1.4.4) (2026-08-22)
+
+
+### Bug Fixes
+
+* remove 'unsafe-inline' from CSP style-src (Closes [#1105](https://github.com/Favourorg/Stellar-forge/issues/1105)) ([#1123](https://github.com/Favourorg/Stellar-forge/issues/1123)) ([838129c](https://github.com/Favourorg/Stellar-forge/commit/838129ccc63f862350ac86ee1efcc1ba2ae4a163))
+
 ## [1.4.3](https://github.com/Favourorg/Stellar-forge/compare/v1.4.2...v1.4.3) (2026-08-22)
 
 
