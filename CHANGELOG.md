@@ -1,3 +1,10 @@
+## [1.5.5](https://github.com/Favourorg/Stellar-forge/compare/v1.5.4...v1.5.5) (2026-08-22)
+
+
+### Bug Fixes
+
+* **api:** store wallet-auth challenges in Vercel KV (Closes [#1091](https://github.com/Favourorg/Stellar-forge/issues/1091)) ([#1132](https://github.com/Favourorg/Stellar-forge/issues/1132)) ([62941bb](https://github.com/Favourorg/Stellar-forge/commit/62941bb0131970c10fc56f5fcf19135eefe8de3f))
+
 ## [1.5.4](https://github.com/Favourorg/Stellar-forge/compare/v1.5.3...v1.5.4) (2026-08-22)
 
 
