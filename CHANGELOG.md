@@ -1,3 +1,10 @@
+## [1.5.9](https://github.com/Favourorg/Stellar-forge/compare/v1.5.8...v1.5.9) (2026-08-24)
+
+
+### Bug Fixes
+
+* **contracts:** fuzz the real burn entrypoint, not a reimplementation ([#1098](https://github.com/Favourorg/Stellar-forge/issues/1098)) ([#1137](https://github.com/Favourorg/Stellar-forge/issues/1137)) ([be8a342](https://github.com/Favourorg/Stellar-forge/commit/be8a3424d514423f9946635ff899440911bd3377))
+
 ## [1.5.8](https://github.com/Favourorg/Stellar-forge/compare/v1.5.7...v1.5.8) (2026-08-24)
 
 
