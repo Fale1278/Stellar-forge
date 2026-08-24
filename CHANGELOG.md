@@ -1,3 +1,10 @@
+## [1.5.8](https://github.com/Favourorg/Stellar-forge/compare/v1.5.7...v1.5.8) (2026-08-24)
+
+
+### Bug Fixes
+
+* isolate per-recipient fee-split transfer failures from aborting the call ([#1136](https://github.com/Favourorg/Stellar-forge/issues/1136)) ([6e68f0d](https://github.com/Favourorg/Stellar-forge/commit/6e68f0d78f1272fa6a31cc6d8cb54859dc9fb83b))
+
 ## [1.5.7](https://github.com/Favourorg/Stellar-forge/compare/v1.5.6...v1.5.7) (2026-08-24)
 
 
