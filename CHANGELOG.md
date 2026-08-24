@@ -1,3 +1,10 @@
+## [1.5.7](https://github.com/Favourorg/Stellar-forge/compare/v1.5.6...v1.5.7) (2026-08-24)
+
+
+### Bug Fixes
+
+* **contracts:** enforce MAX_BATCH_SIZE cap in create_tokens_batch (Closes [#1100](https://github.com/Favourorg/Stellar-forge/issues/1100)) ([#1135](https://github.com/Favourorg/Stellar-forge/issues/1135)) ([2ba33e5](https://github.com/Favourorg/Stellar-forge/commit/2ba33e5e5516b2e3e66388ebd3dcb4568a3b5a14))
+
 ## [1.5.6](https://github.com/Favourorg/Stellar-forge/compare/v1.5.5...v1.5.6) (2026-08-24)
 
 
