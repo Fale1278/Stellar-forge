@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/Favourorg/Stellar-forge/compare/v1.5.11...v1.6.0) (2026-08-24)
+
+
+### Features
+
+* **ci:** add access-control documentation drift check ([#1112](https://github.com/Favourorg/Stellar-forge/issues/1112)) ([#1148](https://github.com/Favourorg/Stellar-forge/issues/1148)) ([7b41cfd](https://github.com/Favourorg/Stellar-forge/commit/7b41cfda11bb62a91fc6bbcfbfd5bf3063f69f9f))
+
 ## [1.5.11](https://github.com/Favourorg/Stellar-forge/compare/v1.5.10...v1.5.11) (2026-08-24)
 
 
