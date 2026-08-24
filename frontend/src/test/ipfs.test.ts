@@ -853,6 +853,9 @@ describe('IPFSService', () => {
       // The CID "QmXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" won't match
       // the hash of our actual metadata JSON
       await expect(
+        service.getMetadata('ipfs://QmXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'),
+      ).rejects.toBeInstanceOf(IPFSUploadError)
+    })
         service.getMetadata(
           'ipfs://QmXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
         ),
