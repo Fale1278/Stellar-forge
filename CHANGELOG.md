@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/Favourorg/Stellar-forge/compare/v1.7.0...v1.8.0) (2026-08-24)
+
+
+### Features
+
+* add client-side CID verification for metadata integrity ([#1139](https://github.com/Favourorg/Stellar-forge/issues/1139)) ([82e9a1b](https://github.com/Favourorg/Stellar-forge/commit/82e9a1b72bf1c78efede6522669d40707a5f295c))
+
 # [1.7.0](https://github.com/Favourorg/Stellar-forge/compare/v1.6.0...v1.7.0) (2026-08-24)
 
 
