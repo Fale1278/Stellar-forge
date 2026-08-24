@@ -6,6 +6,16 @@ Because that document is pinned by whoever created the token, **it is untrusted 
 
 This page documents the constraints the frontend enforces, so third-party integrators pinning their own metadata know what will and will not survive rendering.
 
+## Content Integrity
+
+The frontend verifies that fetched metadata content matches the provided CID before parsing or rendering it. This verification:
+
+- Hashes the raw response bytes using the algorithm embedded in the CID
+- Compares the computed hash against the CID's multihash
+- Rejects content on mismatch, ensuring content-addressing integrity
+
+This guarantee holds only if the configured IPFS gateway is trusted to serve authentic content for pinned CIDs. Against Pinata specifically (the project's own trusted gateway), this is a strong guarantee. For alternate gateways or user-configurable endpoints, the gateway is still the trust boundary — a malicious gateway can serve arbitrary content regardless of CID verification.
+
 ## Document shape
 
 ```json
@@ -83,6 +93,12 @@ Pinata API credentials (`PINATA_API_KEY`, `PINATA_API_SECRET`) live in the **ser
 
 ## Where these are enforced
 
+| Layer | Location | Notes |
+| --- | --- | --- |
+| Integrity (authoritative) | `verifyCIDMatch()` in `frontend/src/services/ipfs.ts` | Verifies CID matches content before parsing; rejects on mismatch |
+| Read (authoritative) | `getMetadata` in `frontend/src/services/ipfs.ts` | The only check that binds for externally-pinned metadata |
+| Write (advisory) | `MetadataForm.tsx`, `MetadataUploadForm.tsx` | Better UX; trivially bypassed by pinning directly |
+| Render (defence in depth) | `TokenDetail.tsx`, `TokenExplorer.tsx` | Bounds height regardless of character count |
 | Layer                     | Location                                         | Notes                                                    |
 | ------------------------- | ------------------------------------------------ | -------------------------------------------------------- |
 | Read (authoritative)      | `getMetadata` in `frontend/src/services/ipfs.ts` | The only check that binds for externally-pinned metadata |
