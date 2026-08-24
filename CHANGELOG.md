@@ -1,3 +1,11 @@
+## [1.5.10](https://github.com/Favourorg/Stellar-forge/compare/v1.5.9...v1.5.10) (2026-08-24)
+
+
+### Bug Fixes
+
+* **api:** add rate limiting to auth challenge endpoints ([#1144](https://github.com/Favourorg/Stellar-forge/issues/1144)) ([600e8a0](https://github.com/Favourorg/Stellar-forge/commit/600e8a057f98129ad93a520030c3224682da0400)), closes [#1101](https://github.com/Favourorg/Stellar-forge/issues/1101)
+* **api:** sanitize lastError in health/indexer to avoid leaking internal error details ([#1143](https://github.com/Favourorg/Stellar-forge/issues/1143)) ([c51d179](https://github.com/Favourorg/Stellar-forge/commit/c51d179b782507f167150b719309715fcf6225d9)), closes [#1103](https://github.com/Favourorg/Stellar-forge/issues/1103)
+
 ## [1.5.9](https://github.com/Favourorg/Stellar-forge/compare/v1.5.8...v1.5.9) (2026-08-24)
 
 
