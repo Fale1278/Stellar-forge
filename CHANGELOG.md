@@ -1,3 +1,10 @@
+## [1.5.11](https://github.com/Favourorg/Stellar-forge/compare/v1.5.10...v1.5.11) (2026-08-24)
+
+
+### Bug Fixes
+
+* reclaim orphaned IPFS pins on failed set_metadata (Closes [#1096](https://github.com/Favourorg/Stellar-forge/issues/1096)) ([#1146](https://github.com/Favourorg/Stellar-forge/issues/1146)) ([d845880](https://github.com/Favourorg/Stellar-forge/commit/d84588094a620097ffcb3d66135201ffedc70ad8))
+
 ## [1.5.10](https://github.com/Favourorg/Stellar-forge/compare/v1.5.9...v1.5.10) (2026-08-24)
 
 
