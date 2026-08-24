@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/Favourorg/Stellar-forge/compare/v1.6.0...v1.7.0) (2026-08-24)
+
+
+### Features
+
+* **api:** persist contract events in the indexer store (supersedes [#1138](https://github.com/Favourorg/Stellar-forge/issues/1138)) ([#1154](https://github.com/Favourorg/Stellar-forge/issues/1154)) ([45ad5bc](https://github.com/Favourorg/Stellar-forge/commit/45ad5bc0af5d6a8079746f03ff2399fc47be653b))
+
 # [1.6.0](https://github.com/Favourorg/Stellar-forge/compare/v1.5.11...v1.6.0) (2026-08-24)
 
 
